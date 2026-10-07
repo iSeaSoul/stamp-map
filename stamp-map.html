@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>国立公園乃印マップ | National Park Stamp Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+<style>
+  :root{
+    --forest:#1B3A2E;
+    --forest-dark:#122822;
+    --parchment:#F3EDDD;
+    --paper:#FBF8EF;
+    --ink:#2A2621;
+    --ink-soft:#5B564C;
+    --vermillion:#B23A2E;
+    --moss:#5C7A5E;
+    --gold:#C89B3C;
+    --line: rgba(42,38,33,.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Noto Sans JP', sans-serif;
+    background:var(--parchment);
+    color:var(--ink);
+  }
+  .brand{font-family:'Shippori Mincho', serif;}
+
+  #app{ display:flex; flex-direction:column; height:100vh; }
+
+  header{
+    background:var(--forest);
+    color:var(--parchment);
+    padding:14px 20px;
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    flex-wrap:wrap;
+    border-bottom:3px solid var(--gold);
+  }
+  header h1{
+    font-size:1.25rem;
+    margin:0;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  header .en{
+    font-size:.78rem;
+    color:#CFE0D3;
+    font-weight:400;
+  }
+  header .count{
+    margin-left:auto;
+    font-size:.82rem;
+    color:#EADFC3;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  header .count b{ color:#fff; font-size:1rem; }
+
+  .layout{ flex:1; display:flex; min-height:0; }
+
+  #sidebar{
+    width:400px;
+    min-width:320px;
+    background:var(--paper);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  #map{ flex:1; background:#dfe7e1; }
+
+  .sidebar-controls{ padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+  #search{
+    width:100%;
+    padding:9px 12px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:inherit;
+    font-size:.92rem;
+    background:#fff;
+  }
+  #search:focus{ outline:2px solid var(--moss); outline-offset:1px; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip{
+    font-size:.76rem;
+    padding:5px 10px;
+    border:1px solid var(--moss);
+    color:var(--moss);
+    background:transparent;
+    border-radius:3px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .chip.active{ background:var(--moss); color:#fff; }
+
+  .progress-wrap{
+    padding:8px 16px;
+    font-size:.74rem;
+    color:var(--ink-soft);
+    border-bottom:1px solid var(--line);
+    display:none;
+  }
+  .progress-wrap.show{ display:block; }
+  .progress-bar{ height:4px; background:var(--line); border-radius:2px; margin-top:5px; overflow:hidden; }
+  .progress-fill{ height:100%; background:var(--gold); width:0%; transition:width .3s; }
+
+  #list{ flex:1; overflow-y:auto; padding:6px 0 40px; }
+  .park-group{ border-bottom:1px solid var(--line); }
+  .park-head{
+    padding:10px 16px 8px;
+    position:sticky; top:0;
+    background:var(--paper);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .park-head-text{ flex:1; min-width:0; }
+  .park-head .jp{ font-family:'Shippori Mincho',serif; font-weight:700; font-size:.95rem; }
+  .park-head .en{ font-size:.72rem; color:var(--ink-soft); }
+  .park-stamp-btn{
+    flex:none;
+    width:30px; height:30px;
+    border-radius:50%;
+    border:2px solid var(--moss);
+    background:transparent;
+    cursor:pointer;
+    color:transparent;
+    font-size:.75rem;
+    font-family:'Shippori Mincho',serif;
+    line-height:1;
+  }
+  .park-stamp-btn.on{
+    background:var(--vermillion);
+    border-color:var(--vermillion);
+    color:#fff;
+  }
+
+  .facility{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:8px 16px 8px 20px;
+    cursor:pointer;
+    border-top:1px solid rgba(0,0,0,.03);
+  }
+  .facility:hover{ background:#EFE7D2; }
+  .facility .fac-dot{
+    flex:none;
+    width:10px; height:10px;
+    border-radius:50%;
+    margin-top:6px;
+    background:var(--forest);
+    opacity:.35;
+  }
+  .facility .fac-dot.on{
+    background:var(--vermillion);
+    opacity:1;
+  }
+  .facility .fac-text{ flex:1; min-width:0; }
+  .facility .fac-en{ font-size:.86rem; font-weight:500; }
+  .facility .fac-jp{ font-size:.76rem; color:var(--ink-soft); }
+  .facility .fac-note{ font-size:.7rem; color:var(--vermillion); margin-top:2px; }
+  .facility .fac-pending{ font-size:.68rem; color:var(--ink-soft); font-style:italic; }
+
+  .empty-msg{ padding:24px 16px; color:var(--ink-soft); font-size:.85rem; }
+
+  .leaflet-popup-content{ font-family:'Noto Sans JP',sans-serif; font-size:.85rem; min-width:200px; }
+  .popup-en{ font-weight:700; margin-bottom:2px; }
+  .popup-jp{ color:var(--ink-soft); font-size:.78rem; margin-bottom:4px; }
+  .popup-park{ font-size:.72rem; color:var(--moss); font-family:'Shippori Mincho',serif; margin-bottom:6px; }
+  .popup-addr{ font-size:.76rem; margin-bottom:4px; }
+  .popup-link{ font-size:.76rem; }
+  .popup-note{ font-size:.72rem; color:var(--vermillion); margin-top:4px; }
+  .popup-stamp{
+    margin-top:8px;
+    padding:5px 10px;
+    border:1px solid var(--vermillion);
+    background:#fff;
+    color:var(--vermillion);
+    border-radius:3px;
+    cursor:pointer;
+    font-size:.76rem;
+    font-family:inherit;
+  }
+  .popup-stamp.on{ background:var(--vermillion); color:#fff; }
+
+  .cluster-icon{
+    background:var(--forest);
+    color:#fff;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Shippori Mincho',serif;
+    font-weight:700;
+    border:2px solid var(--paper);
+  }
+
+  @media (max-width: 760px){
+    .layout{ flex-direction:column; }
+    #sidebar{ width:100%; height:46%; border-right:none; border-bottom:1px solid var(--line); }
+    #map{ height:54%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 class="brand">日本の国立公園乃印マップ</h1>
+    <span class="en">National Park Stamp Map — unofficial companion to env.go.jp's stamp rally</span>
+    <div class="count">集めた印 Parks stamped: <b id="visitedCount">0</b> / <span id="totalCount">0</span></div>
+  </header>
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="sidebar-controls">
+        <input id="search" type="text" placeholder="施設名・住所で検索 / Search facility or address" />
+        <div class="chips" id="regionChips"></div>
+      </div>
+      <div id="list"></div>
+    </aside>
+    <main id="map"></main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script>
+/* ---------------------------------------------------------------
+   DATA — extracted from https://www.env.go.jp/nature/nationalparks/pick-up/stamp/
+   regions follow the source page's own 7-area grouping.
+--------------------------------------------------------------- */
+const REGIONS = {
+  hokkaido: "北海道地区 Hokkaido",
+  tohoku: "東北地区 Tohoku",
+  kanto: "関東地区 Kanto",
+  chubu: "中部地区 Chubu",
+  kinki: "近畿地区 Kinki",
+  chugoku_shikoku: "中国四国地区 Chugoku-Shikoku",
+  kyushu_okinawa: "九州・沖縄地区 Kyushu-Okinawa"
+};
+
+const PARKS = [
+{id:1, jp:"利尻礼文サロベツ国立公園", en:"Rishiri-Rebun-Sarobetsu National Park", regions:["hokkaido"], facilities:[
+  {jp:"サロベツ湿原センター", en:"Sarobetsu Wetland Center", addr:"8662 Kami-Sarobetsu, Toyotomi, Teshio, Hokkaido, Japan", url:"http://sarobetsu.or.jp/swc/"},
+  {jp:"幌延ビジターセンター", en:"Horonobe Visitor Center", addr:"Shimonuma, Horonobe, Teshio, Hokkaido, Japan", note:"Winter closure: Nov–Apr"}
+]},
+{id:2, jp:"知床国立公園", en:"Shiretoko National Park", regions:["hokkaido"], facilities:[
+  {jp:"知床世界遺産ルサフィールドハウス", en:"Shiretoko World Heritage Rusa Field House", addr:"8 Kitahama, Rausu, Menashi, Hokkaido, Japan", url:"https://policies.env.go.jp/park/shiretoko/rusa-fieldhouse/", note:"Winter closure: Nov 1 – Apr 30"},
+  {jp:"知床世界遺産センター", en:"Shiretoko World Heritage Conservation Center", addr:"186-10 Utoro-Nishi, Shari, Shari, Hokkaido, Japan", url:"https://policies.env.go.jp/park/shiretoko/whcc/"},
+  {jp:"知床羅臼ビジターセンター", en:"Shiretoko Rausu Visitor Center", addr:"6-27 Yunosawa, Rausu, Menashi, Hokkaido, Japan", url:"https://policies.env.go.jp/park/shiretoko/rausu-vc/"},
+  {jp:"知床五湖フィールドハウス", en:"Shiretoko Goko Lakes Field House", addr:"549 Iwaobetsu, Onnebetsu, Shari, Shari, Hokkaido, Japan", url:"https://www.goko.go.jp/index.html", note:"Winter closure: early Nov – mid Apr"},
+  {jp:"知床自然センター", en:"Shiretoko National Park Nature Center", addr:"531 Iwaobetsu, Onnebetsu, Shari, Shari, Hokkaido, Japan", url:"https://center.shiretoko.or.jp/"}
+]},
+{id:3, jp:"阿寒摩周国立公園", en:"Akan-Mashu National Park", regions:["hokkaido"], facilities:[
+  {jp:"川湯ビジターセンター", en:"Kawayu Visitor Center", addr:"2-2-6 Kawayu Onsen, Teshikaga, Kawakami, Hokkaido, Japan", url:"https://www.kawayu-eco-museum.com/"},
+  {jp:"和琴フィールドハウス", en:"Wakoto Field House", addr:"Kussharo-Wakoto, Teshikaga, Kawakami, Hokkaido, Japan", note:"Winter closure: Nov – mid Apr"},
+  {jp:"阿寒湖畔ビジターセンター", en:"Akankohan Visitor Center", addr:"1-1-1 Akanko Onsen, Akancho, Kushiro, Hokkaido, Japan", url:"http://business4.plala.or.jp/akan-eco/"},
+  {jp:"マリモ展示観察センター", en:"Marimo Exhibition and Observation Center", addr:"1-5-20 Akanko Onsen, Akan, Kushiro, Hokkaido, Japan", url:"https://marimo-web.org/observation_center/about_oc.html"}
+]},
+{id:4, jp:"釧路湿原国立公園", en:"Kushiro Shitsugen National Park", regions:["hokkaido"], facilities:[
+  {jp:"塘路湖エコミュージアムセンター", en:"Lake Toro Eco-museum Center", addr:"Genya, Toro, Shibecha, Kawakami, Hokkaido, Japan", url:"https://www.kushiro-shitsugen-np.jp/kansatu/tooroedo/"},
+  {jp:"温根内ビジターセンター", en:"Onnenai Visitor Center", addr:"Onnenai, Tsurui, Akan, Hokkaido, Japan", url:"https://www.kushiro-shitsugen-np.jp/kansatu/onnenaiv/"},
+  {jp:"釧路湿原野生生物保護センター", en:"Kushiroshitsugen Wildlife Center", addr:"2-2101 Hokuto, Kushiro, Hokkaido, Japan", url:"https://www.kushiro-shitsugen-np.jp/kansatu/hogo/"},
+  {jp:"細岡ビジターズラウンジ", en:"Hosooka Visitors Lounge", addr:"22-9 Takkobu, Kushiro, Kushiro, Hokkaido, Japan", url:"https://www.kushiro-shitsugen-np.jp/kansatu/hosooka/"},
+  {jp:"釧路市湿原展望台", en:"Kushiro Marsh Observatory", addr:"6-11 Hokuto, Kushiro, Hokkaido, Japan", url:"https://ja.kushiro-lakeakan.com/things_to_do/3639/"}
+]},
+{id:5, jp:"大雪山国立公園", en:"Daisetsuzan National Park", regions:["hokkaido"], facilities:[
+  {jp:"ぬかびら源泉郷ビジターセンター", en:"Higashi Daisetsu Nature Center", addr:"48-2 Nukabira Gensenkyo, Kamishihoro, Katou, Hokkaido, Japan", url:"https://www.ht-shizenkan.com/"},
+  {jp:"層雲峡ビジターセンター", en:"Sounkyo Visitor Center", addr:"Sounkyo, Kamikawa, Kamikawa, Hokkaido, Japan", url:"https://sounkyovc.net/"},
+  {jp:"旭岳ビジターセンター", en:"Asahidake Visitor Center", addr:"Asahidake Onsen, Higashikawa, Kamikawa, Hokkaido, Japan", url:"https://www.asahidake-vc-2291.jp/"}
+]},
+{id:6, jp:"日高山脈襟裳十勝国立公園", en:"Hidakasanmyaku-Erimo-Tokachi National Park", regions:["hokkaido"], facilities:[
+  {jp:"アポイ岳ジオパークビジターセンター", en:"Mt. Apoi Geopark Visitor Center", addr:"479-13 Hirau, Samani, Samani, Hokkaido, Japan", url:"https://apoi-geopark.jp/access/visitor_center.html", note:"Winter closure: Nov – Mar"},
+  {jp:"襟裳岬 風の館", en:"Cape Erimo \"Kaze no Yakata\"", addr:"366-3 Erimomisaki, Erimo, Horoizumi, Hokkaido, Japan", url:"https://www.town.erimo.lg.jp/kaze/index.html", note:"Winter closure: Dec – Feb"},
+  {jp:"日高山脈山岳センター", en:"Hidaka Mountains Information Center", addr:"713 Minami-Satsunai, Nakasatsunai, Kawanishi, Hokkaido, Japan", url:"https://satsunaigawacamp.com/", note:"Winter closure: Nov – Apr"}
+]},
+{id:7, jp:"支笏洞爺国立公園", en:"Shikotsu-Toya National Park", regions:["hokkaido"], facilities:[
+  {jp:"支笏湖ビジターセンター", en:"Lake Shikotsu Visitor Center", addr:"Shikotsuko Onsen, Chitose, Hokkaido, Japan", url:"https://shikotsukovc.sakura.ne.jp"},
+  {jp:"洞爺財田自然体験ハウス", en:"Takarada Visitor Center", addr:"3 Takarada, Toyako, Abuta, Hokkaido, Japan", url:"http://toyako-vc.jp/takarada/"},
+  {jp:"洞爺湖ビジターセンター", en:"Toyako Visitor Center", addr:"142-5 Toyako Onsen, Toyako, Abuta, Hokkaido, Japan", url:"http://www.toyako-vc.jp/"},
+  {jp:"中島・湖の森博物館", en:"Nakajima Lake Forest Museum", addr:"Nakajima, Sobetsu, Usu, Hokkaido, Japan", url:"http://www.town.toyako.hokkaido.jp/tourism/art_culture/atc007/", note:"Winter closure: Nov – late Apr"}
+]},
+{id:8, jp:"十和田八幡平国立公園", en:"Towada-Hachimantai National Park", regions:["tohoku"], facilities:[
+  {jp:"十和田ビジターセンター", en:"Towada Visitor Center", addr:"486 Towadakohan-Yasumiya, Okuse, Towada, Aomori, Japan", url:"https://www.env.go.jp/park/towada/guide/towadavc/index.html"},
+  {jp:"八幡平ビジターセンター", en:"Hachimantai Visitor Center", addr:"2 Onuma, Hachimantai, Kazuno, Akita, Japan", url:"https://www.hachimantai-vc.com/", note:"Winter closure: Nov 7 – Apr 11"},
+  {jp:"網張ビジターセンター", en:"Amihari Visitor Center", addr:"1-2 Komatsukura, Nagayama, Shizukuishi, Iwate, Japan", url:"http://amihari17.ec-net.jp/index.html"},
+  {jp:"奥入瀬渓流館", en:"Oirase Stream Museum", addr:"183 Tochikubo, Okuse, Towada, Aomori, Japan", url:"https://oirase-towada.jp/"},
+  {jp:"玉川温泉ビジターセンター", en:"Tamagawa Onsen Visitor Center", addr:"Shibukurosawa, Tamagawa, Tazawako, Semboku, Akita, Japan", note:"Winter closure: early Nov – late Apr"},
+  {jp:"松尾八幡平ビジターセンター", en:"Matsuo Hachimantai Visitor Center", addr:"1-28 Kashiwadai, Hachimantai, Iwate, Japan", url:"https://www.hachimantai.or.jp/visitor_center/"}
+]},
+{id:9, jp:"三陸復興国立公園", en:"Sanriku Fukko National Park", regions:["tohoku"], facilities:[
+  {jp:"浄土ヶ浜ビジターセンター", en:"Jodogahama Visitor Center", addr:"32-69 Hitachihama, Miyako, Iwate, Japan", url:"https://jodogahama-vc.jp"},
+  {jp:"種差海岸インフォメーションセンター", en:"Tanesashi Coast Information Center", addr:"14-167 Tanakubo, Samemachi, Hachinohe, Aomori, Japan", url:"https://tanesashi.info/"},
+  {jp:"碁石海岸インフォメーションセンター", en:"Goishi Coast Information Center", addr:"221-68 Ohama, Suezaki, Ofunato, Iwate, Japan", url:"https://goishi.info/"},
+  {jp:"南三陸海のビジターセンター", en:"Minamisanriku Marine Visitor Center", addr:"21-1 Sakamoto, Tokura, Minamisanriku, Motoyoshi, Miyagi, Japan", url:"https://www.kawatouminovisitorcenter.jp/umi/"},
+  {jp:"石巻川のビジターセンター", en:"Ishinomaki Riverside Visitor Center", addr:"1 Higashida, Jusanhama, Kitakami, Ishinomaki, Miyagi, Japan", url:"https://www.kawatouminovisitorcenter.jp/kawa/"},
+  {jp:"牡鹿半島ビジターセンター", en:"Oshika Peninsula Visitor Center", addr:"Ayukawahama Minami-50-1, Ishinomaki, Miyagi, Japan", url:"https://oshika-vc.jp/"},
+  {jp:"名取トレイルセンター", en:"MCT Natori Trail Center", addr:"12-1 Yuriagehigashi 3-chome, Natori, Miyagi, Japan", url:"https://m-tc.org/"},
+  {jp:"唐桑半島ビジターセンター", en:"Karakuwa Peninsula Visitor Center", addr:"4-3 Karakuwacho Sakihama, Kesennuma, Miyagi, Japan", url:"https://kesennuma-kanko.jp/visitor-center/"},
+  {jp:"北山崎ビジターセンター", en:"Kitayamazaki Visitor Center", addr:"129-10 Kitayama, Tanohata, Shimohei, Iwate, Japan", url:"https://tanohata-taiken.jp"}
+]},
+{id:10, jp:"磐梯朝日国立公園", en:"Bandai-Asahi National Park", regions:["tohoku"], facilities:[
+  {jp:"月山ビジターセンター", en:"Gassan Visitor Center", addr:"147-5 Haguroyama, Touge, Haguro, Tsuruoka, Yamagata, Japan", url:"https://gassan.jp/"},
+  {jp:"浄土平ビジターセンター", en:"Jododaira Visitor Center", addr:"Jododaira, Washikurayama, Tsuchiyu-Onsenmachi, Fukushima, Japan", url:"https://www.jododaira-vc.jp/", note:"Winter closure: mid Nov – mid Apr"},
+  {jp:"裏磐梯ビジターセンター", en:"Urabandai Visitor Center", addr:"1093-697 Kengamine, Hibara, Kitashiobara, Yama, Fukushima, Japan", url:"https://urabandai-vc.jp/"},
+  {jp:"裏磐梯サイトステーション", en:"Urabandai Sight Station", addr:"1092-65 Onokawahara, Hibara, Kitashiobara, Yama, Fukushima, Japan", url:"https://mori-eki.com"},
+  {jp:"山形県自然博物園ネイチャーセンター", en:"Yamagata Prefectural Natural Museum Park Nature Center", addr:"159 Ubagatake, Shizu, Nishikawa, Nishimurayama, Yamagata, Japan", url:"https://gassan-bunarin.jp/", note:"Winter closure: Nov – Apr"},
+  {jp:"安達太良・吾妻自然センター", en:"Adatara Azuma Nature Center", addr:"1-104 Dake Onsen, Nihonmatsu, Fukushima, Japan", url:"https://www.instagram.com/adatara_nc/"}
+]},
+{id:11, jp:"日光国立公園", en:"Nikko National Park", regions:["kanto"], facilities:[
+  {jp:"日光湯元ビジターセンター", en:"Nikko Yumoto Visitor Center", addr:"Yumoto, Nikko, Tochigi, Japan", url:"http://nikkoyumotovc.com/"},
+  {jp:"那須平成の森フィールドセンター", en:"Nasu Heisei-no-Mori Forest Field Center", addr:"3254 Takakuhei, Nasu, Nasu, Tochigi, Japan", url:"https://nasuheisei-f.jp/"},
+  {jp:"那須高原ビジターセンター", en:"Nasu Kogen Visitor Center", addr:"207-2 Yumoto, Nasu, Nasu, Tochigi, Japan", url:"https://nasu-vc.jp/"},
+  {jp:"日光自然博物館", en:"Tochigi Prefectural Nikko Natural Museum", addr:"2480-1 Chugushi, Nikko, Tochigi, Japan", url:"https://www.nikko-nsm.co.jp/"},
+  {jp:"塩原温泉ビジターセンター", en:"Shiobara Onsen Visitor Center", addr:"Shiobara Maeyama Kokuyurin, Nasushiobara, Tochigi, Japan", url:"https://www.siobara.or.jp/vc/"}
+]},
+{id:12, jp:"尾瀬国立公園", en:"Oze National Park", regions:["kanto"], facilities:[
+  {jp:"尾瀬沼ビジターセンター", en:"Ozenuma Visitor Center", addr:"Hiuchigatake, Hinoemata, Minamiaizu, Fukushima, Japan", note:"Winter closure: Nov – early May"},
+  {jp:"尾瀬山の鼻ビジターセンター", en:"Oze Yamanohana Visitor Center", addr:"898-9 Tokura, Katashina, Tone, Gunma, Japan", url:"https://oze-fnd.or.jp/ozb/b-vc/", note:"Winter closure: Nov – early May"}
+]},
+{id:13, jp:"上信越高原国立公園", en:"Joshin'etsukogen National Park", regions:["chubu"], facilities:[
+  {jp:"谷川岳インフォメーションセンター", en:"Tanigawadake Information Center", addr:"Yubiso, Minakami, Tone, Gunma, Japan", url:"https://tanigawa-ic.com/"},
+  {jp:"鹿沢インフォメーションセンター", en:"Kazawa Information Center", addr:"Kazawa Picnic Site, Tashiro, Tsumagoi, Agatsuma, Gunma, Japan", url:"https://www.kazawa.jp/"},
+  {jp:"万座しぜん情報館", en:"Manza Nature Center", addr:"2401 Manza Onsen, Hoshimata, Tsumagoi, Agatsuma, Gunma, Japan", url:"https://manzanc.jp/info"},
+  {jp:"志賀高原自然保護センター", en:"Shigakogen Nature Protection Center", addr:"7148 Hirao, Yamanouchi, Shimotakai, Nagano, Japan", url:"https://shizenhogo-center.shigakogen.gr.jp/"},
+  {jp:"湯の丸高原ビジターセンター", en:"Yunomaru Kogen Visitor Center", addr:"Yunomaru, Mihari, Tomi, Nagano, Japan", url:"https://tomikan.jp/yunomaru_visitor_center/"}
+]},
+{id:14, jp:"妙高戸隠連山国立公園", en:"Myoko-Togakushi Renzan National Park", regions:["chubu"], facilities:[
+  {jp:"妙高高原ビジターセンター", en:"Myokokogen Visitor Center", addr:"2248-4 Sekigawa, Myoko, Niigata, Japan", url:"https://myokovc.com/"},
+  {jp:"野尻湖ナウマンゾウ博物館", en:"Nojiriko Naumann Elephant Museum", addr:"287-5 Nojiri, Shinano, Kamiminochi, Nagano, Japan", url:"http://nojiriko-museum.com/"},
+  {jp:"戸隠地質化石博物館", en:"Togakushi Museum of Natural History", addr:"3400 Togakushitochihara, Nagano, Nagano, Japan", url:"http://www.tgk.janis.or.jp/~togakushi-museum/index.html"},
+  {jp:"フォッサマグナミュージアム", en:"Fossa Magna Museum", addr:"1313 Ichinomiya, Itoigawa, Niigata, Japan"}
+]},
+{id:15, jp:"秩父多摩甲斐国立公園", en:"Chichibu-Tama-Kai National Park", regions:["kanto"], facilities:[
+  {jp:"三峰ビジターセンター", en:"Mitsumine Visitor Center", addr:"8-1 Mitsumine, Chichibu, Saitama, Japan", url:"https://www.pref.saitama.lg.jp/soshiki/b0504/"},
+  {jp:"奥多摩ビジターセンター", en:"Okutama Visitor Center", addr:"171-1 Hikawa, Okutama, Nishitama, Tokyo, Japan", url:"https://www.ces-net.jp/okutamavc/"},
+  {jp:"御岳インフォメーションセンター", en:"Mitake Information Center", addr:"332 Mitake Hon-cho, Ome, Tokyo, Japan", url:"https://www.omekanko.gr.jp/association/facility/"},
+  {jp:"御岳ビジターセンター", en:"Mitake Visitor Center", addr:"38-5 Mitake, Ome, Tokyo, Japan", url:"https://www.ces-net.jp/mitakevc/index.html"},
+  {jp:"山のふるさと村ビジターセンター", en:"Yama-no-Furusato Mura Visitor Center", addr:"1740 Kawano, Okutama, Nishitama, Tokyo, Japan", url:"https://www.yamafuru.com/"},
+  {jp:"檜原都民の森 森林館", en:"Hinohara Tokyo Citizens' Forest Hall", addr:"7146 Kazuma, Hinohara, Nishitama, Tokyo, Japan", url:"https://www.hinohara-mori.jp/"},
+  {jp:"東京都奥多摩 都民の森", en:"Okutama Citizens' Forest", addr:"654 Sakai, Okutama, Nishitama, Tokyo, Japan", url:"https://www.tomin-no-mori.jp/"},
+  {jp:"みずがき湖ビジターセンター", en:"Lake Mizugakiko Visitor Center", addr:"3730-3 Hishi, Sutama, Hokuto, Yamanashi, Japan", url:"https://prozack3.wixsite.com/visitorcentre"}
+]},
+{id:16, jp:"小笠原国立公園", en:"Ogasawara National Park", regions:["kanto"], facilities:[
+  {jp:"小笠原世界遺産センター", en:"Ogasawara World Heritage Centre", addr:"Nishimachi, Chichijima, Ogasawara, Tokyo, Japan", url:"https://ogasawara-info.jp/"},
+  {jp:"小笠原ビジターセンター", en:"Ogasawara Visitor Center", addr:"Nishimachi, Chichijima, Ogasawara, Tokyo, Japan", url:"https://www.tokyo-park.or.jp/park/ogasawara/"}
+]},
+{id:17, jp:"富士箱根伊豆国立公園", en:"Fuji-Hakone-Izu National Park", regions:["kanto"], facilities:[
+  {jp:"箱根ビジターセンター", en:"Hakone Visitor Center", addr:"164 Moto-Hakone, Hakone, Ashigarashimo, Kanagawa, Japan", url:"https://hakonevc.sunnyday.jp/"},
+  {jp:"田貫湖ふれあい自然塾", en:"Lake Tanuki Nature School", addr:"633-14 Saori, Fujinomiya, Shizuoka, Japan", url:"https://www.tanuki-ko.gr.jp/"},
+  {jp:"富士山須走口インフォメーションセンター", en:"Mt. Fuji Subashiri Information Center", addr:"Subashiri Trail 5th Station, Subashiri, Oyama, Shizuoka, Japan", note:"Winter closure: Oct 21 – Apr 25"},
+  {jp:"箱根町立森のふれあい館", en:"Hakone Woodland Museum", addr:"381-4 Hakone, Hakone, Ashigarashimo, Kanagawa, Japan", url:"https://www.hakone.or.jp/morifure/index.html"},
+  {jp:"山梨県立富士山世界遺産センター", en:"Yamanashi Prefectural Fujisan World Heritage Center", addr:"6663-1 Funatsu, Fuji-Kawaguchiko, Minami-Tsuru, Yamanashi, Japan", url:"https://www.fujisan-whc.jp/"},
+  {jp:"昭和の森会館 天城ビジターセンター", en:"Showa-no-Mori Center (Amagi Visitor Center)", addr:"892-6 Yugashima, Izu, Shizuoka, Japan", url:"https://izugeopark.org/vc/vc_amagi/"},
+  {jp:"八丈ビジターセンター", en:"Hachijo Visitor Center", addr:"2843 Okago, Hachijo, Tokyo, Japan", url:"http://www.hachijo-vc.com/vc/vc.php"}
+]},
+{id:18, jp:"中部山岳国立公園", en:"Chubusangaku National Park", regions:["chubu"], facilities:[
+  {jp:"上高地ビジターセンター", en:"Kamikochi Visitor Center", addr:"Kamikochi 4468, Azumi, Matsumoto, Nagano, Japan", url:"https://www.kamikochi-vc.or.jp/", note:"Winter closure: Nov 16 – mid Apr"},
+  {jp:"上高地インフォメーションセンター", en:"Kamikochi Information Center", addr:"Kamikochi 4468, Azumi, Matsumoto, Nagano, Japan", url:"https://www.kamikochi-vc.or.jp/know/informationcenter.html", note:"Winter closure: Nov 16 – mid Apr"},
+  {jp:"沢渡ナショナルパークゲート", en:"Sawando National Park Gate", addr:"Azumi 4466-20, Matsumoto, Nagano, Japan", url:"https://www.kamikochi-vc.or.jp/know/nationalparkgate.html", note:"Winter closure: Nov 16 – mid Apr"},
+  {jp:"欅平ビジターセンター", en:"Keyaki-Daira Visitor Center", addr:"Kurobe Okuyama, Unazuki, Kurobe, Toyama, Japan", url:"https://www.keyakidaira.info/", note:"Closed when the Kurobe Gorge Railway is suspended"},
+  {jp:"立山自然保護センター", en:"Tateyama Nature Conservation Center", addr:"Murododaira-Ashikuraji, Tateyama, Nakaniikawa, Toyama, Japan", url:"https://tateyama-shizenhogo-c.raicho-mimamori.net/", note:"Winter closure: late Nov – early Apr"},
+  {jp:"乗鞍自然保護センター", en:"Norikura Nature Conservation Center", addr:"4306-5 Azumi, Matsumoto, Nagano, Japan", url:"https://norikura-vc.com/", note:"Winter closure: mid Nov – mid Apr"},
+  {jp:"栂池ビジターセンター", en:"Tsugaike Visitor Center", addr:"12883-1 Chikuniotsu, Otari, Kitaazumi, Nagano, Japan", note:"Winter closure: Nov 5 – May"},
+  {jp:"奥飛騨ビジターセンター", en:"Oku-Hida Visitor Center", addr:"763-12 Hirayu, Oku-Hida Onsenkyo, Takayama, Gifu, Japan", url:"https://hidasanmyaku-gifu.jp/okuhida-vc/"},
+  {jp:"乗鞍自然展示館", en:"Norikura Shizen Tenjikan Museum", addr:"122 Iwaitani, Nyukawa, Takayama, Gifu, Japan", note:"Winter closure: Nov – May 14"},
+  {jp:"五色ヶ原の森案内センター", en:"Goshikigahara Forest Visitor Center", addr:"471-3 Kute, Nyukawa, Takayama, Gifu, Japan", url:"https://goshikinomori.com/", note:"Winter closure: Nov – May 19"},
+  {jp:"新穂高センター", en:"Shinhotaka Center", addr:"710-9 Kamisaka, Okuhida Onsenkyo, Takayama, Gifu, Japan", url:"https://www.city.takayama.lg.jp/shisetsu/1004141/1004487/1005412.html"}
+]},
+{id:19, jp:"白山国立公園", en:"Hakusan National Park", regions:["chubu"], facilities:[
+  {jp:"市ノ瀬ビジターセンター", en:"Ichinose Visitor Center", addr:"Ichinose, Shiramine, Hakusan, Ishikawa, Japan", note:"Winter closure: early Nov – late Apr"},
+  {jp:"中宮温泉ビジターセンター", en:"Chugu Onsen Visitor Center", addr:"Chugu, Hakusan, Ishikawa, Japan", note:"Winter closure: early Nov – late Apr"},
+  {jp:"桂湖ビジターセンター", en:"Katsura Lake Visitor Center", addr:"Katsura, Nanto, Toyama, Japan", url:"https://gokayama-kankou.com/", note:"Winter closure: Nov – Apr"},
+  {jp:"白山室堂ビジターセンター", en:"Hakusan Murodo Visitor Center", addr:"Shiramine, Hakusan, Ishikawa, Japan", note:"Winter closure: Oct 16 – Apr"},
+  {jp:"南竜ヶ馬場ビジターセンター", en:"Minamiryuugabanba Visitor Center", addr:"Shiramine, Hakusan, Ishikawa, Japan", note:"Winter closure: Oct 16 – Jun 29"},
+  {jp:"白山国立公園センター", en:"Hakusan National Park Center", addr:"57 Otsu Shiramine Tsu, Hakusan, Ishikawa, Japan"},
+  {jp:"ブナオ山観察舎", en:"Bunaoyama Observatory", addr:"72-5 Ozo So, Hakusan, Ishikawa, Japan", note:"Closed: early May – mid Nov"},
+  {jp:"白山平泉寺歴史探遊館まほろば", en:"Hakusan Heisenji Historical Museum Mahoroba", addr:"66-2-12 Heisenji, Katsuyama, Fukui, Japan", url:"https://www.city.katsuyama.fukui.jp/heisenji/mahoroba/"}
+]},
+{id:20, jp:"南アルプス国立公園", en:"Minami Alps National Park", regions:["kanto"], facilities:[
+  {jp:"野呂川広河原インフォメーションセンター", en:"Norogawa-Hirogawara Information Center", addr:"1685 Norogawairi, Ashiyasu-Ashikura, Minami Alps, Yamanashi, Japan"},
+  {jp:"芦安山岳館", en:"Ashiyasu Mountain Museum", addr:"1570 Ashiyasu-Ashikura, Minami Alps, Yamanashi, Japan", url:"https://www.minamialps-net.jp/museum/kikaku"}
+]},
+{id:21, jp:"伊勢志摩国立公園", en:"Ise-Shima National Park", regions:["chubu"], facilities:[
+  {jp:"横山ビジターセンター", en:"Yokoyama Visitor Center", addr:"875-24 Ugata, Ago, Shima, Mie, Japan", url:"https://chubu.env.go.jp/nature/yokoyama/index.html"},
+  {jp:"ともやまビジターセンター", en:"Tomoyama Visitor Center", addr:"2199 Daiocho Nakiri, Shima, Mie, Japan", url:"https://www.city.shima.mie.jp/kakuka/tomoyama/index.html", note:"Stamp is at the Tomoyama park office window"},
+  {jp:"鳥羽ビジターセンター", en:"Toba Visitor Center", addr:"Toba Marine Terminal, 1-2383-51, Toba, Toba, Mie, Japan", url:"https://www.ise-shima.or.jp/tvc/"}
+]},
+{id:22, jp:"吉野熊野国立公園", en:"Yoshino-Kumano National Park", regions:["kinki"], facilities:[
+  {jp:"大台ヶ原ビジターセンター", en:"Odaigahara Visitor Center", addr:"660-1 Kotochi, Kamikitayama, Yoshino, Nara, Japan", url:"https://kinki.env.go.jp/nature/odaigahara/shisetsu/shisetsu_index.html", note:"Winter closure: late Nov – late Apr"},
+  {jp:"宇久井ビジターセンター", en:"Ugui Visitor Center", addr:"830 Ugui, Nachikatsuura, Higashimuro, Wakayama, Japan", url:"https://www.ugui-vc.jp/"},
+  {jp:"潮風の休憩所", en:"Shiokaze-no-Kyukeisho", addr:"Shionomisaki, Kushimoto, Higashimuro, Wakayama, Japan", url:"https://www.town.kushimoto.wakayama.jp/kanko/shionomisaki/shiokaze.html"}
+]},
+{id:23, jp:"山陰海岸国立公園", en:"San'inkaigan National Park", regions:["kinki"], facilities:[
+  {jp:"竹野スノーケルセンター", en:"Takeno Snorkeling Center", addr:"1218 Oura, Kirihama, Takeno, Toyooka, Hyogo, Japan", url:"https://takeno-scvc.jp/"},
+  {jp:"鳥取砂丘ビジターセンター", en:"Tottori Sand Dunes Visitor Center", addr:"2164-971 Yuyama, Fukube, Tottori, Tottori, Japan", url:"https://www.sakyu-vc.com/jp/"},
+  {jp:"山陰海岸ジオパークと海の大地自然館", en:"San'in Kaigan Geopark Museum of the Earth and Sea", addr:"1794-4 Makidani, Iwami, Iwami, Tottori, Japan", url:"https://www.pref.tottori.lg.jp/255369.htm"}
+]},
+{id:24, jp:"瀬戸内海国立公園", en:"Setonaikai National Park", regions:["kinki","chugoku_shikoku","kyushu_okinawa"], facilities:[
+  {jp:"大久野島ビジターセンター", en:"Okunoshima Island Visitor Center", addr:"Okunoshima, Tadanoumi, Takehara, Hiroshima, Japan", url:"https://chushikoku.env.go.jp/okunoshima/top.html", note:"Closed for renovation; reopening FY2026"},
+  {jp:"五色台ビジターセンター", en:"Goshikidai Visitor Center", addr:"1733-18 Nishiyama, Kisawa, Ogoshi, Sakaide, Kagawa, Japan", url:"https://goshikivc.jp/"},
+  {jp:"鷲羽山ビジターセンター", en:"Washuzan Visitor Center", addr:"1-2 Shimotsui-Tanoura, Kurashiki, Okayama, Japan", url:"http://wasyuzan-vc.jp/"},
+  {jp:"野呂山ビジターセンター", en:"Norosan Visitor Center", addr:"5502-238 Itayasumi, Kawajiri, Kure, Hiroshima, Japan", url:"http://norosan.or.jp/kanko/visiter.html"},
+  {jp:"六甲山ビジターセンター", en:"Mt. Rokko Visitor Center", addr:"123 Kita Rokko, Rokkosan, Nada, Kobe, Hyogo, Japan", url:"https://rokkosan.center/"},
+  {jp:"うずの丘大鳴門橋記念館", en:"Uzunooka Onaruto Bridge Memorial Hall", addr:"936-3 Fukura Hei, Minamiawaji, Hyogo, Japan", url:"https://kinen.uzunokuni.com/"}
+]},
+{id:25, jp:"大山隠岐国立公園", en:"Daisen-Oki National Park", regions:["chugoku_shikoku"], facilities:[
+  {jp:"大山自然歴史館", en:"Daisen Museum of Nature and History", addr:"43 Daisen, Daisen, Saihaku, Tottori, Japan", url:"http://daisen-museum.jp/"},
+  {jp:"三瓶自然館", en:"Shimane Nature Museum of Mt. Sanbe", addr:"1121-8 Tane, Sanbe, Ooda, Shimane, Japan", url:"https://www.nature-sanbe.jp/sahimel/guidance/opening.html"},
+  {jp:"隠岐自然館", en:"Oki Islands Geopark Museum", addr:"61 Menukinoyon, Nakamachi, Okinoshima, Oki, Shimane, Japan", url:"https://www.oki-geopark.jp/museum/"},
+  {jp:"蒜山郷土博物館", en:"Hiruzen Local History Museum", addr:"1694 Hiruzen-Kaminagata, Maniwa, Okayama, Japan", url:"https://www.city.maniwa.lg.jp/site/hiruhaku/"}
+]},
+{id:26, jp:"足摺宇和海国立公園", en:"Ashizuri-Uwakai National Park", regions:["chugoku_shikoku"], facilities:[
+  {jp:"竜串ビジターセンター", en:"Tatsukushi Visitor Center", addr:"4032-2 Misaki, Tosashimizu, Kochi, Japan", url:"https://tosashimizu-geo.jp/uminowa/"},
+  {jp:"滑床ビジターセンター万年荘", en:"Nametoko Visitor Center Mannenso", addr:"Meguro, Matsuno, Kitauwa, Ehime, Japan", note:"Temporarily closed"}
+]},
+{id:27, jp:"西海国立公園", en:"Saikai National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"九十九島ビジターセンター", en:"Kujukushima Visitor Center", addr:"1053-2 Kashimae-cho, Sasebo, Nagasaki, Japan", url:"https://kujukushima-visitorcenter.jp/"},
+  {jp:"鐙瀬ビジターセンター", en:"Abunze Visitor Center", addr:"1333-3 Nonokire, Goto, Nagasaki, Japan", url:"https://goto.nagasaki-tabinet.com/spot/334"}
+]},
+{id:28, jp:"雲仙天草国立公園", en:"Unzen-Amakusa National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"雲仙お山の情報館", en:"Unzen Visitor Center", addr:"320 Unzen, Obama, Unzen, Nagasaki, Japan", url:"https://unzenvc.com/"},
+  {jp:"雲仙諏訪の池ビジターセンター", en:"Unzen Suwanoike Visitor Center", addr:"3952-1 Yamahata, Obama, Unzen, Nagasaki, Japan", url:"https://www.unzen-suwanoike.com/"},
+  {jp:"平成新山ネイチャーセンター", en:"Heisei-shinzan Nature Center", addr:"2683 Minami Senbongi, Shimabara, Nagasaki, Japan", url:"https://heiseinc.com/"},
+  {jp:"田代原トレイルセンター", en:"Tashirobaru Trail Center", addr:"3387-2 Ohira, Tei, Chijiiwa, Unzen, Nagasaki, Japan", url:"https://www.city.unzen.nagasaki.jp/kiji0032204/index.html"},
+  {jp:"天草ビジターセンター", en:"Amakusa Visitor Center", addr:"6311-1 Aitsu, Matsushima, Kamiamakusa, Kumamoto, Japan"},
+  {jp:"富岡ビジターセンター", en:"Tomioka Visitor Center", addr:"2245-15 Tomioka, Reihoku, Amakusa, Kumamoto, Japan"}
+]},
+{id:29, jp:"阿蘇くじゅう国立公園", en:"Aso-Kuju National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"南阿蘇ビジターセンター", en:"Minamiaso Visitor Center", addr:"3219 Takamori, Takamori, Aso, Kumamoto, Japan", url:"http://www.minamiaso-vc.go.jp/"},
+  {jp:"阿蘇草原保全活動センター 草原学習館", en:"Aso Grassland Conservation Center", addr:"656 Ozato, Aso, Kumamoto, Japan", url:"http://aso-sougencenter.jp/"},
+  {jp:"長者原ビジターセンター", en:"Chojabaru Visitor Center", addr:"255-33 Tano, Kokonoe, Kusu, Oita, Japan", url:"https://kujufanclub.com/"},
+  {jp:"阿蘇山上ビジターセンター", en:"Mount Aso Visitor Center", addr:"1930-1 Akamizu, Aso, Kumamoto, Japan", url:"https://aso-visitorcenter.com"}
+]},
+{id:30, jp:"霧島錦江湾国立公園", en:"Kirishima-Kinkowan National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"えびのエコミュージアムセンター", en:"Ebino Eco-museum Center", addr:"1495-5 Suenaga, Ebino, Miyazaki, Japan", url:"https://ebino-ecomuseum.go.jp/"},
+  {jp:"重富海岸自然ふれあい館", en:"Shigetomi Kaigan Nature Experience Museum (Nagisa Museum)", addr:"7675 Hiramatsu, Aira, Kagoshima, Japan", url:"https://www.nagisa-museum.com/"},
+  {jp:"高千穂河原ビジターセンター", en:"Takachihogawara Visitor Center", addr:"2583-12 Kirishima-taguchi, Kirishima, Kagoshima, Japan", url:"https://takachiho-visitorcenter.org/"}
+]},
+{id:31, jp:"屋久島国立公園", en:"Yakushima National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"屋久島世界遺産センター", en:"Yakushima World Heritage Conservation Center", addr:"2739-343 Anbo-maedake, Yakushima, Kumage, Kagoshima, Japan", url:"https://www.env.go.jp/park/yakushima/ywhcc/index.html"}
+]},
+{id:32, jp:"奄美群島国立公園", en:"Amamigunto National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"奄美大島世界遺産センター", en:"Amami-Oshima World Heritage Conservation Center", addr:"467-1 Ishihara, Sumiyo, Amami, Kagoshima, Japan", url:"https://amami-whcc.jp/"},
+  {jp:"奄美野生生物保護センター", en:"Amami Wildlife Conservation Center", addr:"551 Koshinohata, Ongachi, Yamato, Oshima, Kagoshima, Japan", url:"https://kyushu.env.go.jp/okinawa/awcc/"},
+  {jp:"徳之島世界遺産センター", en:"Tokunoshima World Heritage Conservation Center", addr:"2206 Kedoku, Tokunoshima, Oshima, Kagoshima, Japan", url:"https://tokunoshima-whcc.com/"},
+  {jp:"奄美自然観察の森", en:"Amami Nature Forest", addr:"1233-3 Fukuhiri, Tatsugo, Tatsugo, Oshima, Kagoshima, Japan", url:"https://www.anof-tatsugo.jp/"}
+]},
+{id:33, jp:"やんばる国立公園", en:"Yambaru National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"やんばる世界遺産センター ウフギー自然館", en:"Yambaru World Heritage Conservation Center Ufugi Nature Museum", addr:"263-1 Hiji, Kunigami, Kunigami, Okinawa, Japan", url:"https://www.ufugi-yambaru.com/", note:"Long-term closure for renovation; reopening planned"},
+  {jp:"やんばるの森ビジターセンター", en:"Forest Visitor Center of Yambaru", addr:"95 Tsuha, Ogimi, Kunigami, Okinawa, Japan", url:"https://ogimi-kanko.com/"}
+]},
+{id:34, jp:"慶良間諸島国立公園", en:"Keramashoto National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"青のゆくる館", en:"Ao no Yukuru Kan", addr:"95 Zamami, Zamami, Shimajiri, Okinawa, Japan"},
+  {jp:"阿嘉島さんごゆんたく館", en:"Sango Yuntaku Kan", addr:"936-2 Aka, Zamami, Shimajiri, Okinawa, Japan"},
+  {jp:"渡嘉敷港船舶窓口", en:"Tokashikikou Senpaku Madoguchi", addr:"346 Tokashiki, Tokashiki, Shimajiri, Okinawa, Japan"}
+]},
+{id:35, jp:"西表石垣国立公園", en:"Iriomote-Ishigaki National Park", regions:["kyushu_okinawa"], facilities:[
+  {jp:"西表野生生物保護センター", en:"Iriomote Wildlife Conservation Center", addr:"Komi, Taketomi, Yaeyama, Okinawa, Japan", url:"https://iwcc.jp/"},
+  {jp:"国際サンゴ礁研究・モニタリングセンター", en:"International Coral Reef Research and Monitoring Center", addr:"2-27 Yashima, Ishigaki, Okinawa, Japan", url:"https://kyushu.env.go.jp/okinawa/coremoc/index.html"},
+  {jp:"竹富島ビジターセンター（ゆがふ館）", en:"Taketomijima Visitor Center (Yugafukan)", addr:"2350 Taketomi, Taketomi, Yaeyama, Okinawa, Japan", url:"https://taketomijima.jp/information/"},
+  {jp:"黒島ビジターセンター", en:"Kuroshima Visitor Center", addr:"1 Kuro-shima, Taketomi, Yaeyama, Okinawa, Japan"}
+]},
+{id:36, jp:"新宿御苑", en:"Shinjuku Gyoen", regions:["kanto"], facilities:[
+  {jp:"National Parks Discovery Center", en:"National Parks Discovery Center", addr:"11 Naito-machi, Shinjuku, Tokyo, Japan", url:"https://www.env.go.jp/nature/nationalparks/pick-up/discovery-center/"}
+]}
+];
+
+/* ---------------------------------------------------------------
+   Flatten data, assign stable ids
+--------------------------------------------------------------- */
+const FACILITIES = [];
+PARKS.forEach(park => {
+  park.facilities.forEach((f, i) => {
+    FACILITIES.push({
+      fid: 'p' + park.id + '-f' + i,
+      parkId: park.id,
+      parkJp: park.jp,
+      parkEn: park.en,
+      regions: park.regions,
+      jp: f.jp, en: f.en, addr: f.addr, url: f.url || '', note: f.note || ''
+    });
+  });
+});
+document.getElementById('totalCount').textContent = PARKS.length;
+
+/* ---------------------------------------------------------------
+   COORDS — looked up once offline (Google Places) and baked in here,
+   so the page needs no runtime geocoding calls at all.
+   Keyed by facility id (fid): [lat, lng]
+--------------------------------------------------------------- */
+const COORDS = {
+  'p1-f0': [45.1109389, 141.7039082], 'p1-f1': [45.0101112, 141.7309011],
+  'p2-f0': [44.1388317, 145.2638513], 'p2-f1': [44.0694826, 144.991301], 'p2-f2': [44.0320209, 145.1613564], 'p2-f3': [44.1221849, 145.08057], 'p2-f4': [44.0915095, 145.0229848],
+  'p3-f0': [43.6366621, 144.4337731], 'p3-f1': [43.5767987, 144.3104118], 'p3-f2': [43.435182, 144.1010379], 'p3-f3': [43.469575, 144.1081053],
+  'p4-f0': [43.1538594, 144.5073056], 'p4-f1': [43.1102818, 144.3272763], 'p4-f2': [43.0664509, 144.2973535], 'p4-f3': [43.1004353, 144.4501013], 'p4-f4': [43.0739325, 144.3205793],
+  'p5-f0': [43.3659766, 143.1932831], 'p5-f1': [43.7247931, 142.9463215], 'p5-f2': [43.6520253, 142.7995155],
+  'p6-f0': [42.1117153, 142.9886668], 'p6-f1': [41.9246455, 143.249249], 'p6-f2': [42.5953793, 142.952449],
+  'p7-f0': [42.7727487, 141.4041342], 'p7-f1': [42.6415643, 140.8498386], 'p7-f2': [42.5639578, 140.8151022], 'p7-f3': [42.5960411, 140.8447333],
+  'p8-f0': [40.4245729, 140.893861], 'p8-f1': [39.9822761, 140.802117], 'p8-f2': [39.8217484, 140.94156], 'p8-f3': [40.574573, 140.9786978], 'p8-f4': [39.9632189, 140.7245616], 'p8-f5': [39.9201295, 140.975399],
+  'p9-f0': [39.6465219, 141.9786743], 'p9-f1': [40.5087078, 141.6083394], 'p9-f2': [38.9913159, 141.7421699], 'p9-f3': [38.6437973, 141.4742553], 'p9-f4': [38.5769687, 141.4503844], 'p9-f5': [38.2947026, 141.5101656], 'p9-f6': [38.1686597, 140.9511386], 'p9-f7': [38.8624513, 141.6719181], 'p9-f8': [39.9789529, 141.9518161],
+  'p10-f0': [38.6883902, 139.983358], 'p10-f1': [37.7232774, 140.2546268], 'p10-f2': [37.6557238, 140.0914838], 'p10-f3': [37.6775143, 140.0715836], 'p10-f4': [38.5044471, 139.9976627], 'p10-f5': [37.6063895, 140.3559683],
+  'p11-f0': [36.8048738, 139.42279], 'p11-f1': [37.1173227, 140.0084559], 'p11-f2': [37.0968024, 140.004417], 'p11-f3': [36.7386936, 139.5000483], 'p11-f4': [36.9670614, 139.8337493],
+  'p12-f0': [36.9269725, 139.315987], 'p12-f1': [36.9152524, 139.1973758],
+  'p13-f0': [36.8346845, 138.9637933], 'p13-f1': [36.4582395, 138.435605], 'p13-f2': [36.6343175, 138.509804], 'p13-f3': [36.7197227, 138.4911381], 'p13-f4': [36.4265883, 138.4192503],
+  'p14-f0': [36.8655041, 138.1746575], 'p14-f1': [36.8322184, 138.2062607], 'p14-f2': [36.6785054, 138.0681041], 'p14-f3': [37.0256333, 137.8705708],
+  'p15-f0': [35.9214055, 138.9338162], 'p15-f1': [35.8084348, 139.0977035], 'p15-f2': [35.8013889, 139.1832239], 'p15-f3': [35.7867355, 139.1506], 'p15-f4': [35.7666577, 139.0229498], 'p15-f5': [35.7395464, 139.0289589], 'p15-f6': [35.7375955, 139.0311448], 'p15-f7': [35.856616, 138.5029672],
+  'p16-f0': [27.0938657, 142.1909146], 'p16-f1': [27.0932225, 142.1919831],
+  'p17-f0': [35.2409955, 138.9960392], 'p17-f1': [35.3454363, 138.5574188], 'p17-f2': [35.3659162, 138.7784222], 'p17-f3': [35.1891228, 139.0171349], 'p17-f4': [35.4856913, 138.7706531], 'p17-f5': [34.855252, 138.9216576], 'p17-f6': [33.112111, 139.783588],
+  'p18-f0': [36.2495906, 137.6394314], 'p18-f1': [36.2495906, 137.6394314], 'p18-f2': [36.1647617, 137.655896], 'p18-f3': [36.6970855, 137.6574434], 'p18-f4': [36.5768085, 137.5962318], 'p18-f5': [36.1122633, 137.6198144], 'p18-f6': [36.773984, 137.8182195], 'p18-f7': [36.1902267, 137.5519227], 'p18-f8': [36.1247548, 137.5537662], 'p18-f9': [36.1739963, 137.5058395], 'p18-f10': [36.283598, 137.574773],
+  'p19-f0': [36.1144573, 136.7006268], 'p19-f1': [36.2631621, 136.7605763], 'p19-f2': [36.3289683, 136.837862], 'p19-f3': [36.1489257, 136.7678363], 'p19-f4': [36.1489257, 136.7678363], 'p19-f5': [36.1653124, 136.6348317], 'p19-f6': [36.2616658, 136.7271142], 'p19-f7': [36.0435142, 136.5357361],
+  'p20-f0': [35.6972033, 138.2707755], 'p20-f1': [35.6331433, 138.3610515],
+  'p21-f0': [34.3353277, 136.8003795], 'p21-f1': [34.2873215, 136.8405814], 'p21-f2': [34.4901521, 136.8449709],
+  'p22-f0': [34.1801077, 136.0979405], 'p22-f1': [33.6563283, 135.9829272], 'p22-f2': [33.4369373, 135.761536],
+  'p23-f0': [35.6600262, 134.7481733], 'p23-f1': [35.5438388, 134.236649], 'p23-f2': [35.5934645, 134.3395073],
+  'p24-f0': [34.3053659, 132.9942432], 'p24-f1': [34.353453, 133.9241772], 'p24-f2': [34.4356266, 133.8114915], 'p24-f3': [34.2640211, 132.6846194], 'p24-f4': [34.7569979, 135.2294672], 'p24-f5': [34.2394969, 134.6529342],
+  'p25-f0': [35.3937478, 133.5297652], 'p25-f1': [35.1527714, 132.6208631], 'p25-f2': [36.2038478, 133.3352585], 'p25-f3': [35.295306, 133.712252],
+  'p26-f0': [32.7911024, 132.8632975], 'p26-f1': [33.2039325, 132.6594582],
+  'p27-f0': [33.1619418, 129.6787126], 'p27-f1': [32.6419063, 128.8478018],
+  'p28-f0': [32.7392324, 130.2620354], 'p28-f1': [32.7293766, 130.206732], 'p28-f2': [32.7697084, 130.3243019], 'p28-f3': [32.7864625, 130.2562304], 'p28-f4': [32.5400446, 130.4242328], 'p28-f5': [32.5287488, 130.0308099],
+  'p29-f0': [32.843696, 131.1453747], 'p29-f1': [32.9756513, 131.0529061], 'p29-f2': [33.1189491, 131.2304315], 'p29-f3': [32.8854951, 131.052252],
+  'p30-f0': [31.9460739, 130.8441566], 'p30-f1': [31.7090809, 130.6227451], 'p30-f2': [31.8857245, 130.8959187],
+  'p31-f0': [30.3087865, 130.6316354],
+  'p32-f0': [28.2600571, 129.409001], 'p32-f1': [28.3556856, 129.3929723], 'p32-f2': [27.8268148, 128.9544615], 'p32-f3': [28.4521051, 129.5930185],
+  'p33-f0': [26.7283032, 128.1790501], 'p33-f1': [26.6607632, 128.1023163],
+  'p34-f0': [26.2276706, 127.3020324], 'p34-f1': [26.191606, 127.285544], 'p34-f2': [26.1991083, 127.367602],
+  'p35-f0': [24.3310162, 123.908907], 'p35-f1': [24.331786, 124.168648], 'p35-f2': [24.3354124, 124.092825], 'p35-f3': [24.237462, 123.9951966],
+  'p36-f0': [35.6885767, 139.7076114]
+};
+
+/* ---------------------------------------------------------------
+   Persistent storage helpers (window.storage, best-effort)
+--------------------------------------------------------------- */
+const hasStorage = typeof window.storage !== 'undefined';
+async function safeGet(key, shared){ try { return await window.storage.get(key, shared); } catch(e){ return null; } }
+async function safeSet(key, value, shared){ try { return await window.storage.set(key, value, shared); } catch(e){ return null; } }
+
+let visitedSet = new Set();
+
+/* ---------------------------------------------------------------
+   Map setup
+--------------------------------------------------------------- */
+const map = L.map('map', { zoomControl:true }).setView([37.5, 138.0], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18
+}).addTo(map);
+
+const clusterGroup = L.markerClusterGroup({
+  iconCreateFunction: function(cluster){
+    const count = cluster.getChildCount();
+    return L.divIcon({
+      html: '<div class="cluster-icon" style="width:'+(34+Math.min(count,20))+'px;height:'+(34+Math.min(count,20))+'px;">'+count+'</div>',
+      className: '', iconSize: [34,34]
+    });
+  }
+});
+map.addLayer(clusterGroup);
+
+const markerByFid = {};
+
+function stampIcon(visited){
+  return L.divIcon({
+    className:'',
+    html: '<div style="width:22px;height:22px;border-radius:50%;background:'+(visited?'#B23A2E':'#1B3A2E')+';border:2px solid #FBF8EF;box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>',
+    iconSize:[22,22], iconAnchor:[11,11]
+  });
+}
+
+function addMarker(fac, lat, lng){
+  if (markerByFid[fac.fid]) return markerByFid[fac.fid];
+  const marker = L.marker([lat,lng], { icon: stampIcon(visitedSet.has(fac.parkId)) });
+  marker.bindPopup(buildPopupHtml(fac));
+  marker.on('popupopen', () => wirePopupButton(fac));
+  clusterGroup.addLayer(marker);
+  markerByFid[fac.fid] = marker;
+  return marker;
+}
+
+function buildPopupHtml(fac){
+  const stamped = visitedSet.has(fac.parkId);
+  return `
+    <div class="popup-en">${fac.en}</div>
+    <div class="popup-jp">${fac.jp}</div>
+    <div class="popup-park">${fac.parkEn} / ${fac.parkJp}</div>
+    <div class="popup-addr">${fac.addr}</div>
+    ${fac.url ? `<div class="popup-link"><a href="${fac.url}" target="_blank" rel="noopener">Official site ↗</a></div>` : ''}
+    ${fac.note ? `<div class="popup-note">${fac.note}</div>` : ''}
+    <button class="popup-stamp ${stamped?'on':''}" data-park="${fac.parkId}">
+      ${stamped ? '印 Park stamped' : 'Mark park as stamped'}
+    </button>
+  `;
+}
+
+function wirePopupButton(fac){
+  const btn = document.querySelector('.popup-stamp[data-park="'+fac.parkId+'"]');
+  if (btn) btn.addEventListener('click', () => toggleVisited(fac.parkId));
+}
+
+/* ---------------------------------------------------------------
+   Visited tracking (personal, non-shared storage)
+--------------------------------------------------------------- */
+async function loadVisited(){
+  if (!hasStorage) return;
+  const res = await safeGet('visited', false);
+  if (res && res.value) {
+    try { visitedSet = new Set(JSON.parse(res.value)); } catch(e){}
+  }
+  updateVisitedCount();
+}
+async function saveVisited(){
+  if (!hasStorage) return;
+  await safeSet('visited', JSON.stringify([...visitedSet]), false);
+}
+function updateVisitedCount(){
+  document.getElementById('visitedCount').textContent = visitedSet.size;
+}
+function toggleVisited(parkId){
+  if (visitedSet.has(parkId)) visitedSet.delete(parkId); else visitedSet.add(parkId);
+  updateVisitedCount();
+  saveVisited();
+  const stamped = visitedSet.has(parkId);
+  FACILITIES.filter(f => f.parkId === parkId).forEach(fac => {
+    const marker = markerByFid[fac.fid];
+    if (marker) {
+      marker.setIcon(stampIcon(stamped));
+      marker.setPopupContent(buildPopupHtml(fac));
+    }
+  });
+  renderList();
+}
+
+/* ---------------------------------------------------------------
+   Placement — every facility's coordinates are already known (COORDS),
+   so all markers go on the map in one pass, no network calls needed.
+--------------------------------------------------------------- */
+function placeAllMarkers(){
+  FACILITIES.forEach(fac => {
+    const c = COORDS[fac.fid];
+    if (c) addMarker(fac, c[0], c[1]);
+  });
+}
+
+/* ---------------------------------------------------------------
+   Sidebar: region chips, search, list
+--------------------------------------------------------------- */
+let activeRegions = new Set(Object.keys(REGIONS));
+let searchTerm = '';
+
+function buildChips(){
+  const wrap = document.getElementById('regionChips');
+  wrap.innerHTML = '';
+  Object.entries(REGIONS).forEach(([key,label]) => {
+    const chip = document.createElement('button');
+    chip.className = 'chip active';
+    chip.textContent = label.split(' ')[0];
+    chip.title = label;
+    chip.addEventListener('click', () => {
+      if (activeRegions.has(key)) activeRegions.delete(key); else activeRegions.add(key);
+      chip.classList.toggle('active');
+      renderList();
+    });
+    wrap.appendChild(chip);
+  });
+}
+
+function matchesFilter(fac){
+  const regionOk = fac.regions.some(r => activeRegions.has(r));
+  if (!regionOk) return false;
+  if (!searchTerm) return true;
+  const hay = (fac.en+' '+fac.jp+' '+fac.addr+' '+fac.parkEn+' '+fac.parkJp).toLowerCase();
+  return hay.includes(searchTerm);
+}
+
+function renderList(){
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  let shown = 0;
+
+  PARKS.forEach(park => {
+    const matches = FACILITIES.filter(f => f.parkId === park.id && matchesFilter(f));
+    if (!matches.length) return;
+    shown += matches.length;
+
+    const stamped = visitedSet.has(park.id);
+    const group = document.createElement('div');
+    group.className = 'park-group';
+    group.innerHTML = `
+      <div class="park-head">
+        <button class="park-stamp-btn ${stamped?'on':''}" title="Mark park as stamped" data-park="${park.id}">${stamped?'印':''}</button>
+        <div class="park-head-text">
+          <div class="jp">${park.jp}</div>
+          <div class="en">${park.en}</div>
+        </div>
+      </div>
+    `;
+    group.querySelector('.park-stamp-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleVisited(park.id);
+    });
+
+    matches.forEach(fac => {
+      const row = document.createElement('div');
+      row.className = 'facility';
+      row.innerHTML = `
+        <span class="fac-dot ${stamped?'on':''}"></span>
+        <div class="fac-text">
+          <div class="fac-en">${fac.en}</div>
+          <div class="fac-jp">${fac.jp}</div>
+          ${fac.note ? `<div class="fac-note">${fac.note}</div>` : ''}
+        </div>
+      `;
+      row.addEventListener('click', () => {
+        const marker = markerByFid[fac.fid];
+        if (marker){
+          map.flyTo(marker.getLatLng(), 13, { duration: 0.6 });
+          clusterGroup.zoomToShowLayer(marker, () => marker.openPopup());
+        }
+      });
+      group.appendChild(row);
+    });
+    listEl.appendChild(group);
+  });
+
+  if (!shown){
+    listEl.innerHTML = '<div class="empty-msg">該当する設置箇所が見つかりません。<br>No facilities match your search/filters.</div>';
+  }
+}
+
+document.getElementById('search').addEventListener('input', (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  renderList();
+});
+
+/* ---------------------------------------------------------------
+   Init
+--------------------------------------------------------------- */
+(async function init(){
+  buildChips();
+  await loadVisited();
+  placeAllMarkers();
+  renderList();
+})();
+</script>
+</body>
+</html>
